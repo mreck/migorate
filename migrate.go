@@ -87,6 +87,22 @@ func CreateMigrationsFromDir(dir string) ([]Migration, error) {
 	return m, nil
 }
 
+func MigrateFromDir(ctx context.Context, driverName string, db *sql.DB, dir string) error {
+	m, err := CreateMigrationsFromDir(dir)
+	if err != nil {
+		return fmt.Errorf("creating migrations failed: %w", err)
+	}
+	return Migrate(ctx, driverName, db, m)
+}
+
+func MigrateEmbedFS(ctx context.Context, driverName string, db *sql.DB, fs embed.FS) error {
+	m, err := CreateMigrationsFromEmbedFS(fs)
+	if err != nil {
+		return fmt.Errorf("creating migrations failed: %w", err)
+	}
+	return Migrate(ctx, driverName, db, m)
+}
+
 func Migrate(ctx context.Context, driverName string, db *sql.DB, ms []Migration) error {
 	var migrationsFilename string
 	switch driverName {
