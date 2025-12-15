@@ -1,4 +1,4 @@
-package gosimplemigrate
+package migorate
 
 import (
 	"context"
@@ -6,10 +6,8 @@ import (
 	"embed"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"slices"
-	"strings"
+
+	"github.com/mreck/migorate/migrations"
 )
 
 type Migration struct {
@@ -21,93 +19,28 @@ var (
 	ErrDBNotSupported = errors.New("database not supported")
 )
 
-func CreateMigrationsFromEmbedFS(fs embed.FS) ([]Migration, error) {
-	dents, err := fs.ReadDir(".")
-	if err != nil {
-		return nil, fmt.Errorf("reading FS failed: %w", err)
-	}
-
-	var m []Migration
-
-	for _, dent := range dents {
-		if dent.IsDir() {
-			continue
-		}
-
-		b, err := fs.ReadFile(dent.Name())
-		if err != nil {
-			return nil, fmt.Errorf("reading file '%s' failed: %w", dent.Name(), err)
-
-		}
-
-		m = append(m, Migration{
-			Key:    dent.Name(),
-			Script: string(b),
-		})
-	}
-
-	slices.SortFunc(m, func(a, b Migration) int {
-		return strings.Compare(a.Key, b.Key)
-	})
-
-	return m, nil
-}
-
-func CreateMigrationsFromDir(dir string) ([]Migration, error) {
-	dents, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, fmt.Errorf("reading dir failed: %w", err)
-	}
-
-	var m []Migration
-
-	for _, dent := range dents {
-		if dent.IsDir() {
-			continue
-		}
-		if strings.ToLower(filepath.Ext(dent.Name())) != ".sql" {
-			continue
-		}
-
-		b, err := os.ReadFile(filepath.Join(dir, dent.Name()))
-		if err != nil {
-			return nil, fmt.Errorf("reading file '%s' failed: %w", dent.Name(), err)
-		}
-
-		m = append(m, Migration{
-			Key:    dent.Name(),
-			Script: string(b),
-		})
-	}
-
-	slices.SortFunc(m, func(a, b Migration) int {
-		return strings.Compare(a.Key, b.Key)
-	})
-
-	return m, nil
-}
-
 func MigrateFromDir(ctx context.Context, driverName string, db *sql.DB, dir string) error {
-	m, err := CreateMigrationsFromDir(dir)
+	files, err := FromDir(dir)
 	if err != nil {
 		return fmt.Errorf("creating migrations failed: %w", err)
 	}
-	return Migrate(ctx, driverName, db, m)
+	return Migrate(ctx, driverName, db, files)
 }
 
 func MigrateEmbedFS(ctx context.Context, driverName string, db *sql.DB, fs embed.FS) error {
-	m, err := CreateMigrationsFromEmbedFS(fs)
+	files, err := FromEmbedFS(fs)
 	if err != nil {
 		return fmt.Errorf("creating migrations failed: %w", err)
 	}
-	return Migrate(ctx, driverName, db, m)
+	return Migrate(ctx, driverName, db, files)
 }
 
-func Migrate(ctx context.Context, driverName string, db *sql.DB, ms []Migration) error {
-	var migrationsFilename string
+func Migrate(ctx context.Context, driverName string, db *sql.DB, files []SQLFile) error {
+	var initQuery string
+
 	switch driverName {
 	case "sqlite3":
-		migrationsFilename = "sqlite.migrations.sql"
+		initQuery = migrations.Sqlite3
 	default:
 		return ErrDBNotSupported
 	}
@@ -115,11 +48,6 @@ func Migrate(ctx context.Context, driverName string, db *sql.DB, ms []Migration)
 	err := db.PingContext(ctx)
 	if err != nil {
 		return fmt.Errorf("pinging db failed: %w", err)
-	}
-
-	b, err := migrationsFS.ReadFile(migrationsFilename)
-	if err != nil {
-		return fmt.Errorf("reading migrations table script failed: %w", err)
 	}
 
 	cCtx, cancel := context.WithCancel(ctx)
@@ -130,14 +58,14 @@ func Migrate(ctx context.Context, driverName string, db *sql.DB, ms []Migration)
 		return fmt.Errorf("creating transaction failed: %w", err)
 	}
 
-	_, err = tx.Exec(string(b))
+	_, err = tx.Exec(initQuery)
 	if err != nil {
 		return fmt.Errorf("running migration table script failed: %w", err)
 	}
 
-	for _, m := range ms {
+	for _, file := range files {
 		var n int
-		err := tx.QueryRow(`SELECT COUNT(*) FROM "migrations" WHERE "filename" = ?`, m.Key).Scan(&n)
+		err := tx.QueryRow(`SELECT COUNT(*) FROM "migrations" WHERE "filename" = ?`, file.Name).Scan(&n)
 		if err != nil {
 			return fmt.Errorf("selecting from migrations table failed: %w", err)
 		}
@@ -145,14 +73,14 @@ func Migrate(ctx context.Context, driverName string, db *sql.DB, ms []Migration)
 			continue
 		}
 
-		_, err = tx.Exec(m.Script)
+		_, err = tx.Exec(file.Content)
 		if err != nil {
-			return fmt.Errorf("running migration '%s' failed: %w", m.Key, err)
+			return fmt.Errorf("running migration failed: %s: %w", file.Name, err)
 		}
 
-		_, err = tx.Exec(`INSERT INTO "migrations" ("filename") VALUES (?)`, m.Key)
+		_, err = tx.Exec(`INSERT INTO "migrations" ("filename") VALUES (?)`, file.Name)
 		if err != nil {
-			return fmt.Errorf("updating migrations table with '%s' failed: %w", m.Key, err)
+			return fmt.Errorf("updating migrations table failed: %s: %w", file.Name, err)
 		}
 	}
 

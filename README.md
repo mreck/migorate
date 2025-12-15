@@ -1,7 +1,7 @@
-# Go Simple Migrate
+# mi-go-rate
 
 Install:
 
 ```
-go get github.com/mreck/go-simple-migrate
+go get github.com/mreck/migorate
 ```

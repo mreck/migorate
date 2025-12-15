@@ -1,4 +1,4 @@
-package migrationssqlite3
+package queries
 
 import (
 	"embed"
