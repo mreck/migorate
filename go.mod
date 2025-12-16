@@ -1,4 +1,4 @@
-module github.com/mreck/go-simple-migrate
+module github.com/mreck/migorate
 
 go 1.24.4
 

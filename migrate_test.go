@@ -1,43 +1,18 @@
-package gosimplemigrate_test
+package migorate_test
 
 import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 	"sort"
 	"testing"
 
-	gsm "github.com/mreck/go-simple-migrate"
-	msqlite3 "github.com/mreck/go-simple-migrate/testutils/migrations_sqlite3"
+	"github.com/mreck/migorate"
+	"github.com/mreck/migorate/testutils/sqlite3/migrations"
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/stretchr/testify/assert"
 )
-
-func Test_CreateMigrationsFromEmbedFS(t *testing.T) {
-	m, err := gsm.CreateMigrationsFromEmbedFS(msqlite3.FS)
-	assert.NoError(t, err)
-	assert.NotNil(t, m)
-
-	assert.Equal(t, m[0].Key, "001.sql")
-	assert.Equal(t, m[1].Key, "002.sql")
-
-	assert.Equal(t, m[0].Script, mustReadFile("testutils/migrations_sqlite3/001.sql"))
-	assert.Equal(t, m[1].Script, mustReadFile("testutils/migrations_sqlite3/002.sql"))
-}
-
-func Test_CreateMigrationsFromDir(t *testing.T) {
-	m, err := gsm.CreateMigrationsFromDir("testutils/migrations_sqlite3")
-	assert.NoError(t, err)
-	assert.NotNil(t, m)
-
-	assert.Equal(t, m[0].Key, "001.sql")
-	assert.Equal(t, m[1].Key, "002.sql")
-
-	assert.Equal(t, m[0].Script, mustReadFile("testutils/migrations_sqlite3/001.sql"))
-	assert.Equal(t, m[1].Script, mustReadFile("testutils/migrations_sqlite3/002.sql"))
-}
 
 func Test_MigrateFS(t *testing.T) {
 	ctx := context.Background()
@@ -46,13 +21,13 @@ func Test_MigrateFS(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Nil(t, err)
 
-	m, err := gsm.CreateMigrationsFromEmbedFS(msqlite3.FS)
+	m, err := migorate.FromEmbedFS(migrations.FS)
 	assert.NoError(t, err)
 	assert.NotNil(t, m)
 
 	for i := range 3 {
 		t.Run(fmt.Sprintf("[%d]", i), func(t *testing.T) {
-			err := gsm.Migrate(ctx, "sqlite3", db, m)
+			err := migorate.Migrate(ctx, "sqlite3", db, m)
 			assert.Nil(t, err)
 
 			tables, err := getTablesSqlite(db)
@@ -61,11 +36,11 @@ func Test_MigrateFS(t *testing.T) {
 		})
 	}
 
-	m = append(m, gsm.Migration{"3", "CREATE TABLE test_3 (id INT)"})
+	m = append(m, migorate.SQLFile{"3", "CREATE TABLE test_3 (id INT)"})
 
 	for i := range 3 {
 		t.Run(fmt.Sprintf("[%d]", i), func(t *testing.T) {
-			err := gsm.Migrate(ctx, "sqlite3", db, m)
+			err := migorate.Migrate(ctx, "sqlite3", db, m)
 			assert.Nil(t, err)
 
 			tables, err := getTablesSqlite(db)
@@ -102,12 +77,4 @@ func getTablesSqlite(db *sql.DB) ([]string, error) {
 	sort.Strings(tables)
 
 	return tables, nil
-}
-
-func mustReadFile(filename string) string {
-	b, err := os.ReadFile(filename)
-	if err != nil {
-		panic(err)
-	}
-	return string(b)
 }
