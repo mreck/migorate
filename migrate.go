@@ -24,6 +24,7 @@ func MigrateFromDir(ctx context.Context, driverName string, db *sql.DB, dir stri
 	if err != nil {
 		return fmt.Errorf("creating migrations failed: %w", err)
 	}
+
 	return Migrate(ctx, driverName, db, files)
 }
 
@@ -32,6 +33,7 @@ func MigrateEmbedFS(ctx context.Context, driverName string, db *sql.DB, fs embed
 	if err != nil {
 		return fmt.Errorf("creating migrations failed: %w", err)
 	}
+
 	return Migrate(ctx, driverName, db, files)
 }
 

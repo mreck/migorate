@@ -15,7 +15,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test_LoadQueriesFromEmbedFS(t *testing.T) {
+func Test_LoadQueries(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := sql.Open("sqlite3", ":memory:")
@@ -27,7 +27,7 @@ func Test_LoadQueriesFromEmbedFS(t *testing.T) {
 	files, err := migorate.FromEmbedFS(queries.FS)
 	require.NoError(t, err)
 
-	queries, err := migorate.LoadQueriesFromEmbedFS(ctx, files, db)
+	queries, err := migorate.LoadQueries(ctx, files, db)
 	assert.NoError(t, err)
 
 	expected := map[string]string{
@@ -50,7 +50,7 @@ func Test_Queries(t *testing.T) {
 	files, err := migorate.FromEmbedFS(queries.FS)
 	require.NoError(t, err)
 
-	queries, err := migorate.LoadQueriesFromEmbedFS(ctx, files, db)
+	queries, err := migorate.LoadQueries(ctx, files, db)
 	require.NoError(t, err)
 
 	res, err := queries.Exec(ctx, "insert.sql", 1)

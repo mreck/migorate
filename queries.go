@@ -3,6 +3,7 @@ package migorate
 import (
 	"context"
 	"database/sql"
+	"embed"
 	"fmt"
 )
 
@@ -15,7 +16,25 @@ type Queries struct {
 	DB       DB
 }
 
-func LoadQueriesFromEmbedFS(ctx context.Context, files []SQLFile, db DB) (*Queries, error) {
+func LoadQueriesFromDir(ctx context.Context, dir string, db DB) (*Queries, error) {
+	files, err := FromDir(dir)
+	if err != nil {
+		return nil, fmt.Errorf("loading queries failed: %w", err)
+	}
+
+	return LoadQueries(ctx, files, db)
+}
+
+func LoadQueriesEmbedFS(ctx context.Context, fs embed.FS, db DB) (*Queries, error) {
+	files, err := FromEmbedFS(fs)
+	if err != nil {
+		return nil, fmt.Errorf("loading queries failed: %w", err)
+	}
+
+	return LoadQueries(ctx, files, db)
+}
+
+func LoadQueries(ctx context.Context, files []SQLFile, db DB) (*Queries, error) {
 	filedata := map[string]string{}
 
 	for _, file := range files {
